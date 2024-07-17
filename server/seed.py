@@ -1,31 +1,54 @@
+
 #!/usr/bin/env python3
 #server/seed.py
-from random import choice as rc
-from faker import Faker
+from flask import Flask, make_response
+from flask_migrate import Migrate
 
-from app import app
 from models import db, Pet
 
-with app.app_context():
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-    # Create and initialize a faker generator
-    fake = Faker()
+migrate = Migrate(app, db)
 
-    # Delete all rows in the "pets" table
-    Pet.query.delete()
+db.init_app(app)
 
-    # Create an empty list
-    pets = []
 
-    species = ['Dog', 'Cat', 'Chicken', 'Hamster', 'Turtle']
+@app.route('/')
+def index():
+    response = make_response(
+        '<h1>Welcome to the pet directory!</h1>',
+        200
+    )
+    return response
 
-    # Add some Pet instances to the list
-    for n in range(10):
-        pet = Pet(name=fake.first_name(), species=rc(species))
-        pets.append(pet)
+@app.route('/pets/<int:id>')
+def pet_by_id(id):
+    pet = Pet.query.filter(Pet.id == id).first()
 
-    # Insert each Pet in the list into the "pets" table
-    db.session.add_all(pets)
+    if pet:
+        response_body = f'<p>{pet.name} {pet.species}</p>'
+        response_status = 200
+    else:
+        response_body = f'<p>Pet {id} not found</p>'
+        response_status = 404
 
-    # Commit the transaction
-    db.session.commit()
+    response = make_response(response_body, response_status)
+    return response
+
+
+@app.route('/species/<string:species>')
+def pet_by_species(species):
+    pets = Pet.query.filter_by(species=species).all()
+
+    size = len(pets)  # all() returns a list so we can get length
+    response_body = f'<h2>There are {size} {species}s</h2>'
+    for pet in pets:
+        response_body += f'<p>{pet.name}</p>'
+    response = make_response(response_body, 200)
+    return response
+
+
+if __name__ == '__main__':
+    app.run(port=5555, debug=True)
